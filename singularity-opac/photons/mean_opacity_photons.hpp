@@ -43,7 +43,25 @@ namespace impl {
 // TODO(BRR) Note: It is assumed that lambda is constant for all densities and
 // temperatures
 
-template <typename pc = PhysicalConstantsCGS>
+struct Identity {
+  Real operator()(Real rho, Real temp) const {
+    return rho;
+  }
+};
+
+struct RFromRhoCGS {
+  Real operator() (Real rho, Real temp) const {
+    return (rho / (temp * temp * temp)) * 1.e18;
+  }
+};
+
+struct RFromRhoSI {
+  Real operator() (Real rho, Real temp) const {
+    return (rho / (temp * temp * temp)) * 1.e15;
+  }
+};
+
+template <typename pc = PhysicalConstantsCGS, typename RhoTransform = Identity>
 class MeanOpacity {
  public:
   using PC = pc;
@@ -129,6 +147,7 @@ class MeanOpacity {
     DataBox groupBounds;
     ExportOpacityTables_(kappaPlanck, kappaRosseland);
     ExportGroupBounds(groupBounds, groupBounds_, ngroups_);
+    RhoTransform rho_transform_;
 
     ScopedH5ErrorHandler h5_errors;
     hid_t file = OpenFileWrite(filename, append);
@@ -429,7 +448,7 @@ class MeanOpacity {
   PORTABLE_INLINE_FUNCTION
   Real GroupAbsorptionCoefficient_(const DataBox &lkappa, const Real rho,
                                    const Real temp, const int group) const {
-    const Real lRho = ToLog(rho);
+    const Real lRho = ToLog(rho_transform_(rho, temp));
     const Real lT = ToLog(temp);
     return rho * FromLog(lkappa.interpToReal(lRho, lT, group));
   }
@@ -440,7 +459,7 @@ class MeanOpacity {
   PORTABLE_INLINE_FUNCTION
   Real GroupDLogAbsCoeffDLogT_(const DataBox &lkappa, const Real rho,
                                const Real temp, const int group) const {
-    const Real lRho = ToLog(rho);
+    const Real lRho = ToLog(rho_transform_(rho, temp));
     const Real lT = ToLog(temp);
     const auto lT_grid =
         lkappa.range(1); // axis 1 is log10(T) (see setRange in Impl_)
