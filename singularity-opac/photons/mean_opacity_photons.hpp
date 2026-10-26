@@ -73,14 +73,16 @@ class MeanOpacity {
   MeanOpacity(const Opacity &opac, const Real lRhoMin, const Real lRhoMax,
               const int NRho, const Real lTMin, const Real lTMax, const int NT,
               const GroupBoundsIndexer &group_bounds, const int ngroups,
-              const int NNuPerGroup = 64, Real *lambda = nullptr) {
+              const int NNuPerGroup = 64, Real *lambda = nullptr,
+              const RhoTransform &rho_transform) : rho_transform_(rho_transform) {
     MeanOpacityImpl_(opac, lRhoMin, lRhoMax, NRho, lTMin, lTMax, NT,
                      group_bounds, ngroups, NNuPerGroup, lambda);
   }
 
   template <typename GroupBoundsIndexer>
   MeanOpacity(const DataBox &kappaPlanck, const DataBox &kappaRosseland,
-              const GroupBoundsIndexer &group_bounds) {
+              const GroupBoundsIndexer &group_bounds,
+              const RhoTransform &rho_transform) : rho_transform_(rho_transform) {
     // Table-backed multigroup opacities always carry explicit group bounds.
     // To represent [nu_max, infinity), the final bound must literally be
     // IEEE +infinity, not a large finite proxy value.
@@ -91,7 +93,8 @@ class MeanOpacity {
 
   template <typename GroupBoundsIndexer>
   MeanOpacity(const DataBox &opacity, const int gmode,
-              const GroupBoundsIndexer &group_bounds) {
+              const GroupBoundsIndexer &group_bounds,
+              const RhoTransform &rho_transform) : rho_transform_(rho_transform) {
     if (gmode != Planck && gmode != Rosseland) {
       OPAC_ERROR("photons::MeanOpacity: invalid opacity averaging mode");
     }
@@ -101,12 +104,14 @@ class MeanOpacity {
 
 #ifdef SPINER_USE_HDF
   MeanOpacity(const std::string &filename, const int opacid,
-              const bool ipcress_units = false) {
+              const bool ipcress_units = false,
+              const RhoTransform &rho_transform) : rho_transform_(rho_transform) {
     LoadHDF_(filename, opacid, ipcress_units);
   }
 
   MeanOpacity(const std::string &filename, const std::string &material_name,
-              const bool ipcress_units = false) {
+              const bool ipcress_units = false,
+              const RhoTransform &rho_transform) : rho_transform_(rho_transform) {
     LoadHDF_(filename, material_name, ipcress_units);
   }
 
