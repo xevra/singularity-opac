@@ -47,17 +47,35 @@ struct Identity {
   Real operator()(Real rho, Real temp) const {
     return rho;
   }
+  Real ddT (Real rho, Real temp) const {
+    return 0.0;
+  }
+  Real dlRhodlT (Real rho, Real temp) const {
+    return 0.0;
+  }
 };
 
 struct RFromRhoCGS {
   Real operator() (Real rho, Real temp) const {
     return (rho / (temp * temp * temp)) * 1.e18;
   }
+  Real ddT (Real rho, Real temp) const {
+    return (-3e18 * rho) / (temp * temp * temp * temp);
+  }
+  Real dlRhodlT (Real rho, Real temp) const {
+    return -3.0;
+  }
 };
 
 struct RFromRhoSI {
   Real operator() (Real rho, Real temp) const {
     return (rho / (temp * temp * temp)) * 1.e15;
+  }
+  Real ddT (Real rho, Real temp) const {
+    return (-3e15 * rho) / (temp * temp * temp * temp);
+  }
+  Real dlRhodlT (Real rho, Real temp) const {
+    return -3.0;
   }
 };
 
@@ -73,16 +91,14 @@ class MeanOpacity {
   MeanOpacity(const Opacity &opac, const Real lRhoMin, const Real lRhoMax,
               const int NRho, const Real lTMin, const Real lTMax, const int NT,
               const GroupBoundsIndexer &group_bounds, const int ngroups,
-              const int NNuPerGroup = 64, Real *lambda = nullptr,
-              const RhoTransform &rho_transform) : rho_transform_(rho_transform) {
+              const int NNuPerGroup = 64, Real *lambda = nullptr) {
     MeanOpacityImpl_(opac, lRhoMin, lRhoMax, NRho, lTMin, lTMax, NT,
                      group_bounds, ngroups, NNuPerGroup, lambda);
   }
 
   template <typename GroupBoundsIndexer>
   MeanOpacity(const DataBox &kappaPlanck, const DataBox &kappaRosseland,
-              const GroupBoundsIndexer &group_bounds,
-              const RhoTransform &rho_transform) : rho_transform_(rho_transform) {
+              const GroupBoundsIndexer &group_bounds) {
     // Table-backed multigroup opacities always carry explicit group bounds.
     // To represent [nu_max, infinity), the final bound must literally be
     // IEEE +infinity, not a large finite proxy value.
@@ -93,8 +109,7 @@ class MeanOpacity {
 
   template <typename GroupBoundsIndexer>
   MeanOpacity(const DataBox &opacity, const int gmode,
-              const GroupBoundsIndexer &group_bounds,
-              const RhoTransform &rho_transform) : rho_transform_(rho_transform) {
+              const GroupBoundsIndexer &group_bounds) {
     if (gmode != Planck && gmode != Rosseland) {
       OPAC_ERROR("photons::MeanOpacity: invalid opacity averaging mode");
     }
@@ -104,14 +119,12 @@ class MeanOpacity {
 
 #ifdef SPINER_USE_HDF
   MeanOpacity(const std::string &filename, const int opacid,
-              const bool ipcress_units = false,
-              const RhoTransform &rho_transform) : rho_transform_(rho_transform) {
+              const bool ipcress_units = false) {
     LoadHDF_(filename, opacid, ipcress_units);
   }
 
   MeanOpacity(const std::string &filename, const std::string &material_name,
-              const bool ipcress_units = false,
-              const RhoTransform &rho_transform) : rho_transform_(rho_transform) {
+              const bool ipcress_units = false) {
     LoadHDF_(filename, material_name, ipcress_units);
   }
 
@@ -152,7 +165,6 @@ class MeanOpacity {
     DataBox groupBounds;
     ExportOpacityTables_(kappaPlanck, kappaRosseland);
     ExportGroupBounds(groupBounds, groupBounds_, ngroups_);
-    RhoTransform rho_transform_;
 
     ScopedH5ErrorHandler h5_errors;
     hid_t file = OpenFileWrite(filename, append);
@@ -453,7 +465,7 @@ class MeanOpacity {
   PORTABLE_INLINE_FUNCTION
   Real GroupAbsorptionCoefficient_(const DataBox &lkappa, const Real rho,
                                    const Real temp, const int group) const {
-    const Real lRho = ToLog(rho_transform_(rho, temp));
+    const Real lRho = ToLog(RhoTransform()(rho, temp));
     const Real lT = ToLog(temp);
     return rho * FromLog(lkappa.interpToReal(lRho, lT, group));
   }
@@ -464,7 +476,7 @@ class MeanOpacity {
   PORTABLE_INLINE_FUNCTION
   Real GroupDLogAbsCoeffDLogT_(const DataBox &lkappa, const Real rho,
                                const Real temp, const int group) const {
-    const Real lRho = ToLog(rho_transform_(rho, temp));
+    const Real lRho = ToLog(RhoTransform()(rho, temp));
     const Real lT = ToLog(temp);
     const auto lT_grid =
         lkappa.range(1); // axis 1 is log10(T) (see setRange in Impl_)
